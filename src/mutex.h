@@ -8,7 +8,16 @@
 
 // Enable thread safety attributes only with clang.
 // The attributes can be safely erased when compiling with other compilers.
-#if defined(HAVE_THREAD_SAFETY_ATTRIBUTES)
+#if !defined(HAVE_THREAD_SAFETY_ATTRIBUTES)
+#if defined(__clang__) && defined(__has_attribute)
+#if __has_attribute(capability) && __has_attribute(scoped_lockable) && \
+    __has_attribute(guarded_by)
+#define HAVE_THREAD_SAFETY_ATTRIBUTES 1
+#endif
+#endif
+#endif
+
+#if defined(HAVE_THREAD_SAFETY_ATTRIBUTES) && HAVE_THREAD_SAFETY_ATTRIBUTES
 #define THREAD_ANNOTATION_ATTRIBUTE_(x) __attribute__((x))
 #else
 #define THREAD_ANNOTATION_ATTRIBUTE_(x)  // no-op
@@ -76,8 +85,8 @@ class CAPABILITY("mutex") Mutex {
  public:
   Mutex() {}
 
-  void lock() ACQUIRE() { mut_.lock(); }
-  void unlock() RELEASE() { mut_.unlock(); }
+  void lock() ACQUIRE() NO_THREAD_SAFETY_ANALYSIS { mut_.lock(); }
+  void unlock() RELEASE() NO_THREAD_SAFETY_ANALYSIS { mut_.unlock(); }
   std::mutex& native_handle() { return mut_; }
 
  private:
