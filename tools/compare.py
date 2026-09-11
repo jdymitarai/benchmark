@@ -41,8 +41,6 @@ def check_inputs(in1, in2, flags):
         # When both sides are JSON the only supported flag is
         # --benchmark_filter=
         for flag in util.remove_benchmark_flags("--benchmark_filter=", flags):
-            if flag.startswith("--benchmark_color="):
-                continue
             print(
                 "WARNING: passing %s has no effect since both "
                 "inputs are JSON" % flag
@@ -97,38 +95,6 @@ def should_use_color():
     return os.environ.get("TERM", "") != "dumb"
 
 
-def resolve_color(color_flag, benchmark_options):
-    """Determine whether to use color and strip internal color options.
-
-    Returns (use_color, remaining_benchmark_options).
-    """
-    remaining = []
-    color = color_flag
-    for opt in benchmark_options:
-        if opt == "--no-color":
-            color = False
-        elif opt == "--color":
-            color = True
-        elif opt.startswith("--benchmark_color="):
-            val = opt.split("=", 1)[1].lower()
-            if val in ("false", "0", "no"):
-                color = False
-            elif val in ("true", "1", "yes"):
-                color = True
-            elif val == "auto":
-                color = None
-            remaining.append(opt)
-        else:
-            remaining.append(opt)
-
-    if color is None:
-        color = should_use_color()
-    elif color:
-        enable_virtual_terminal_processing()
-
-    return color, remaining
-
-
 def create_parser():
     parser = ArgumentParser(
         description="versatile benchmark output compare tool"
@@ -146,17 +112,10 @@ def create_parser():
         "Internally, all the actual runs are still used, e.g. for U test.",
     )
 
-    color_group = parser.add_mutually_exclusive_group()
-    color_group.add_argument(
-        "--color",
-        dest="color",
-        default=None,
-        action="store_true",
-        help="Always use colors in the terminal output",
-    )
-    color_group.add_argument(
+    parser.add_argument(
         "--no-color",
         dest="color",
+        default=True,
         action="store_false",
         help="Do not use colors in the terminal output",
     )
@@ -334,7 +293,8 @@ def main():
         exit(1)
     assert not unknown_args
     benchmark_options = args.benchmark_options
-    args.color, benchmark_options = resolve_color(args.color, benchmark_options)
+    if args.color:
+        args.color = should_use_color()
 
     if args.mode == "benchmarks":
         test_baseline = args.test_baseline[0].name
@@ -615,61 +575,20 @@ class TestParser(unittest.TestCase):
         self.assertEqual(parsed.filter_contender[0], "e")
         self.assertEqual(parsed.benchmark_options[0], "g")
 
-    def test_benchmarks_color_flag(self):
-        parsed = self.parser.parse_args(
-            ["--color", "benchmarks", self.testInput0, self.testInput1]
-        )
-        self.assertTrue(parsed.color)
-
     def test_benchmarks_no_color_flag(self):
         parsed = self.parser.parse_args(
             ["--no-color", "benchmarks", self.testInput0, self.testInput1]
         )
         self.assertFalse(parsed.color)
 
-    def test_benchmarks_color_default_none(self):
+    def test_benchmarks_color_default_true(self):
         parsed = self.parser.parse_args(
             ["benchmarks", self.testInput0, self.testInput1]
         )
-        self.assertIsNone(parsed.color)
+        self.assertTrue(parsed.color)
 
 
-class TestColorResolution(unittest.TestCase):
-    def test_resolve_color_root_flags(self):
-        color, remaining = resolve_color(True, ["opt1"])
-        self.assertTrue(color)
-        self.assertEqual(remaining, ["opt1"])
-
-        color, remaining = resolve_color(False, ["opt1"])
-        self.assertFalse(color)
-        self.assertEqual(remaining, ["opt1"])
-
-    def test_resolve_color_remainder_flags(self):
-        color, remaining = resolve_color(None, ["--no-color", "opt1"])
-        self.assertFalse(color)
-        self.assertEqual(remaining, ["opt1"])
-
-        color, remaining = resolve_color(None, ["--color", "opt1"])
-        self.assertTrue(color)
-        self.assertEqual(remaining, ["opt1"])
-
-    def test_resolve_color_benchmark_color_flag(self):
-        color, remaining = resolve_color(None, ["--benchmark_color=false"])
-        self.assertFalse(color)
-        self.assertEqual(remaining, ["--benchmark_color=false"])
-
-        color, remaining = resolve_color(None, ["--benchmark_color=0"])
-        self.assertFalse(color)
-        self.assertEqual(remaining, ["--benchmark_color=0"])
-
-        color, remaining = resolve_color(None, ["--benchmark_color=true"])
-        self.assertTrue(color)
-        self.assertEqual(remaining, ["--benchmark_color=true"])
-
-        color, remaining = resolve_color(None, ["--benchmark_color=1"])
-        self.assertTrue(color)
-        self.assertEqual(remaining, ["--benchmark_color=1"])
-
+class TestShouldUseColor(unittest.TestCase):
     def test_should_use_color_no_color_env(self):
         orig = os.environ.get("NO_COLOR")
         try:
