@@ -12,6 +12,7 @@ import os
 import sys
 import unittest
 from argparse import ArgumentParser
+from unittest.mock import patch
 
 import gbench
 from gbench import report, util
@@ -115,7 +116,7 @@ def create_parser():
     parser.add_argument(
         "--no-color",
         dest="color",
-        default=True,
+        default=should_use_color(),
         action="store_false",
         help="Do not use colors in the terminal output",
     )
@@ -293,8 +294,6 @@ def main():
         exit(1)
     assert not unknown_args
     benchmark_options = args.benchmark_options
-    if args.color:
-        args.color = should_use_color()
 
     if args.mode == "benchmarks":
         test_baseline = args.test_baseline[0].name
@@ -581,24 +580,15 @@ class TestParser(unittest.TestCase):
         )
         self.assertFalse(parsed.color)
 
-    def test_benchmarks_color_default_true(self):
-        parsed = self.parser.parse_args(
-            ["benchmarks", self.testInput0, self.testInput1]
-        )
-        self.assertTrue(parsed.color)
-
-
 class TestShouldUseColor(unittest.TestCase):
+    @patch.dict(os.environ, {"NO_COLOR": "1"})
     def test_should_use_color_no_color_env(self):
-        orig = os.environ.get("NO_COLOR")
-        try:
-            os.environ["NO_COLOR"] = "1"
-            self.assertFalse(should_use_color())
-        finally:
-            if orig is None:
-                os.environ.pop("NO_COLOR", None)
-            else:
-                os.environ["NO_COLOR"] = orig
+        self.assertFalse(should_use_color())
+
+    @patch.dict(os.environ, {}, clear=True)
+    @patch("sys.stdout.isatty", return_value=False)
+    def test_should_use_color_not_a_tty(self, mock_isatty):
+        self.assertFalse(should_use_color())
 
 
 if __name__ == "__main__":
