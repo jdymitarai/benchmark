@@ -580,15 +580,32 @@ class TestParser(unittest.TestCase):
         )
         self.assertFalse(parsed.color)
 
-class TestShouldUseColor(unittest.TestCase):
     @patch.dict(os.environ, {"NO_COLOR": "1"})
-    def test_should_use_color_no_color_env(self):
-        self.assertFalse(should_use_color())
+    def test_benchmarks_color_default_no_color_env(self):
+        parser = create_parser()
+        parsed = parser.parse_args(
+            ["benchmarks", self.testInput0, self.testInput1]
+        )
+        self.assertFalse(parsed.color)
 
     @patch.dict(os.environ, {}, clear=True)
     @patch("sys.stdout.isatty", return_value=False)
-    def test_should_use_color_not_a_tty(self, mock_isatty):
-        self.assertFalse(should_use_color())
+    def test_benchmarks_color_default_not_a_tty(self, mock_isatty):
+        parser = create_parser()
+        parsed = parser.parse_args(
+            ["benchmarks", self.testInput0, self.testInput1]
+        )
+        self.assertFalse(parsed.color)
+
+    @patch.dict(os.environ, {}, clear=True)
+    @patch("compare.enable_virtual_terminal_processing", return_value=True)
+    @patch("sys.stdout.isatty", return_value=True)
+    def test_benchmarks_color_default_tty(self, mock_isatty, mock_vt):
+        parser = create_parser()
+        parsed = parser.parse_args(
+            ["benchmarks", self.testInput0, self.testInput1]
+        )
+        self.assertTrue(parsed.color)
 
 
 if __name__ == "__main__":
